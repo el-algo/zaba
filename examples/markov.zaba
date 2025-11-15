@@ -1,0 +1,36 @@
+/*
+  A simple Markov chain for generating sentences
+*/
+
+import "random" for Random
+var random = Random.new()
+
+var markov = {
+  "An":["apple", "orange"],
+  "apple":["is"],
+  "orange":["is"],
+  "is":["very"],
+  "very":["good", "bad.", "very"],
+  "good":["for"],
+  "for": ["you."],
+}
+
+var keys = []
+for (key in markov.keys) {
+  keys.append(key)
+}
+
+var choiceIndex = random.int(0, keys.size)
+var choice = keys[choiceIndex]
+
+while (true) {
+  System.write(choice + " ")
+
+  if (choice[-1] == ".") {
+    break
+  }
+
+  var choices = markov[choice]
+  choiceIndex = random.int(0, choices.count)
+  choice = choices[choiceIndex]
+}
