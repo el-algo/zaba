@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <cstring>
 #include <string>
 #include <sstream>
 
@@ -448,12 +449,41 @@ struct Scanner
                 // A comment goes until the end of the line.
                 while (peek() != '\n' && !isAtEnd())
                     advance();
-                std::printf("COMMENT - NOT A TOKEN \n");
             }
-            else
+            
+            if (match('*'))
             {
-                addToken(TOKEN_SLASH);
+                int nesting = 1;
+                while (nesting > 0)
+                {
+                    if (peek() == '\0')
+                    {
+                        std::cerr << "Unterminated block comment.";
+                        return;
+                    }
+                    
+                    if (peek() == '/' && peekNext() == '*')
+                    {
+                        advance();
+                        advance();
+                        nesting++;
+                        continue;
+                    }
+
+                    if (peek() == '*' && peekNext() == '/')
+                    {
+                        advance();
+                        advance();
+                        nesting--;
+                        continue;
+                    }
+
+                    advance();
+                }
+                break;
             }
+
+            addToken(TOKEN_SLASH);
             break;
         case ' ':
         case '\r':
@@ -966,14 +996,18 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    std::filesystem::path src(argv[1]);
+    int srcArg = 1;
+    if (strcmp(argv[srcArg], "-l") == 0)
+        srcArg++;
+    
+    std::filesystem::path src(argv[srcArg]);
     if (src.extension() != ".zaba")
     {
         std::cerr << "Expected a .zaba file" << std::endl;
         return 2;
     }
 
-    std::string codeZaba = loadFileIntoString(argv[1]);
+    std::string codeZaba = loadFileIntoString(argv[srcArg]);
 
     if (codeZaba == "")
     {
@@ -993,10 +1027,14 @@ int main(int argc, char *argv[])
     Parser parser(scanner);
     parser.rewrite();
 
-    //for (auto &t : parser.tokens)
-    //{
-    //    std::cout << std::setw(20) << t.typePrint(t.type) << " " << std::setw(4) << t.line << " |" << t.lexeme << "|\n";
-    //}
+    if (srcArg == 2)
+    {
+        for (auto &t : parser.tokens)
+        {
+            std::cout << std::setw(20) << t.typePrint(t.type) << " " << std::setw(4) << t.line << " |" << t.lexeme << "|\n";
+        }
+        return 0;
+    }
 
     //std::cout << parser.out << "\n";
 
