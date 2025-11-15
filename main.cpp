@@ -162,7 +162,12 @@ struct Token
             "TOKEN_LINE",
             "TOKEN_ERROR",
             "TOKEN_EOF"};
-        return names[type];
+
+        int t = static_cast<int>(type);
+        if (t < 0 || t >= (int)(sizeof(names) / sizeof(names[0])))
+            return "TOKEN_UNKNOWN";
+
+        return names[t];
     }
 
     std::string toString()
@@ -170,34 +175,6 @@ struct Token
         return typePrint(type) + " " + lexeme + "\n";
     }
 };
-
-std::unordered_map<std::string, TokenType> keywords = {
-    {"and", TOKEN_AMPAMP}, // Extension of &&
-    {"break", TOKEN_BREAK},
-    {"continue", TOKEN_CONTINUE},
-    {"class", TOKEN_CLASS},
-    {"construct", TOKEN_CONSTRUCT},
-    {"else", TOKEN_ELSE},
-    {"false", TOKEN_FALSE},
-    {"for", TOKEN_FOR},
-    {"foreign", TOKEN_FOREIGN},
-    {"if", TOKEN_IF},
-    {"import", TOKEN_IMPORT},
-    {"as", TOKEN_AS},
-    {"in", TOKEN_IN},
-    {"is", TOKEN_IS},
-    {"null", TOKEN_NULL},
-    {"or", TOKEN_PIPEPIPE}, // Extension of ||
-    {"return", TOKEN_RETURN},
-    {"static", TOKEN_STATIC},
-    {"struct", TOKEN_STRUCT},
-    {"super", TOKEN_SUPER},
-    {"this", TOKEN_THIS},
-    {"true", TOKEN_TRUE},
-    {"var", TOKEN_VAR},
-    {"while", TOKEN_WHILE},
-    {"func", TOKEN_FUNC}, // Extension of Fn.new
-    {"\0", TOKEN_EOF}};
 
 struct Scanner
 {
@@ -207,10 +184,51 @@ struct Scanner
     int current = 0;
     int line = 0;
 
+    Scanner() = default;
     Scanner(std::string source)
         : source{source} {}
 
-    bool isAtEnd()
+    std::unordered_map<std::string, TokenType> keywords = {
+        {"and", TOKEN_AMPAMP}, // Extension of &&
+        {"break", TOKEN_BREAK},
+        {"continue", TOKEN_CONTINUE},
+        {"class", TOKEN_CLASS},
+        {"construct", TOKEN_CONSTRUCT},
+        {"else", TOKEN_ELSE},
+        {"false", TOKEN_FALSE},
+        {"for", TOKEN_FOR},
+        {"foreign", TOKEN_FOREIGN},
+        {"if", TOKEN_IF},
+        {"import", TOKEN_IMPORT},
+        {"as", TOKEN_AS},
+        {"in", TOKEN_IN},
+        {"is", TOKEN_IS},
+        {"null", TOKEN_NULL},
+        {"or", TOKEN_PIPEPIPE}, // Extension of ||
+        {"return", TOKEN_RETURN},
+        {"static", TOKEN_STATIC},
+        {"struct", TOKEN_STRUCT},
+        {"super", TOKEN_SUPER},
+        {"this", TOKEN_THIS},
+        {"true", TOKEN_TRUE},
+        {"var", TOKEN_VAR},
+        {"while", TOKEN_WHILE},
+        {"func", TOKEN_FUNC}, // Extension of Fn.new
+        {"\0", TOKEN_EOF}};
+
+    void printTokens()
+    {
+        std::cout << "Token list:\n"
+                  << tokens.size();
+        for (auto &t : tokens)
+        {
+            std::cout << std::setw(20) << t.typePrint(t.type)
+                      << " " << std::setw(4) << t.line << " |"
+                      << t.lexeme << "|\n";
+        }
+    }
+
+    bool isAtEnd() const
     {
         return current >= source.length();
     }
@@ -270,11 +288,11 @@ struct Scanner
         advance();
 
         // Trim the surrounding quotes.
-        std::string value = source.substr(start + 1, current - 2);
+        std::string value = source.substr(start + 1, current - start - 2);
         addToken(TOKEN_STRING, value);
     }
 
-    bool isDigit(char c)
+    bool isDigit(char c) const
     {
         return c >= '0' && c <= '9';
     }
@@ -304,14 +322,14 @@ struct Scanner
         addToken(TOKEN_NUMBER, source.substr(start, current - start));
     }
 
-    bool isAlpha(char c)
+    bool isAlpha(char c) const
     {
         return (c >= 'a' && c <= 'z') ||
                (c >= 'A' && c <= 'Z') ||
                c == '_';
     }
 
-    bool isAlphaNumeric(char c)
+    bool isAlphaNumeric(char c) const
     {
         return isAlpha(c) || isDigit(c);
     }
@@ -342,6 +360,43 @@ struct Scanner
         }
 
         addToken(type);
+    }
+
+    void lineComment()
+    {
+        while (peek() != '\n' && !isAtEnd())
+            advance();
+    }
+
+    void blockComment()
+    {
+        int nesting = 1;
+        while (nesting > 0)
+        {
+            if (peek() == '\0')
+            {
+                std::cerr << "Unterminated block comment.";
+                return;
+            }
+
+            if (peek() == '/' && peekNext() == '*')
+            {
+                advance();
+                advance();
+                nesting++;
+                continue;
+            }
+
+            if (peek() == '*' && peekNext() == '/')
+            {
+                advance();
+                advance();
+                nesting--;
+                continue;
+            }
+
+            advance();
+        }
     }
 
     void scanToken()
@@ -446,40 +501,13 @@ struct Scanner
         case '/':
             if (match('/'))
             {
-                // A comment goes until the end of the line.
-                while (peek() != '\n' && !isAtEnd())
-                    advance();
+                lineComment();
+                break;
             }
-            
+
             if (match('*'))
             {
-                int nesting = 1;
-                while (nesting > 0)
-                {
-                    if (peek() == '\0')
-                    {
-                        std::cerr << "Unterminated block comment.";
-                        return;
-                    }
-                    
-                    if (peek() == '/' && peekNext() == '*')
-                    {
-                        advance();
-                        advance();
-                        nesting++;
-                        continue;
-                    }
-
-                    if (peek() == '*' && peekNext() == '/')
-                    {
-                        advance();
-                        advance();
-                        nesting--;
-                        continue;
-                    }
-
-                    advance();
-                }
+                blockComment();
                 break;
             }
 
@@ -555,22 +583,14 @@ struct SymbolTable
 
 struct Parser
 {
-    Scanner scanner;
     std::vector<Token> tokens;
     std::string out;
     Token currentToken;
     int tokenIndex = 0;
 
-    bool classDeclaration = false;
-    bool structDeclaration = false;
-    bool constructDeclaration = false;
+    Parser() = default;
 
-    Parser(Scanner scanner)
-        : scanner{scanner}
-    {
-    }
-
-    TokenType peekType(int offset = 0)
+    TokenType peekType(int offset = 0) const
     {
         if (tokenIndex + offset >= (int)tokens.size())
             return TOKEN_EOF;
@@ -582,7 +602,7 @@ struct Parser
         return tokens[tokenIndex];
     }
 
-    Token peek()
+    Token peek() const
     {
         return tokens[tokenIndex + 1];
     }
@@ -632,122 +652,122 @@ struct Parser
     std::string utils()
     {
         std::string utils =
-        "class Slice {\n"
-        "    construct new() {\n"
-        "        _slice = []\n"
-        "    }\n"
-        "\n"
-        "    construct new(list) {\n"
-        "        _slice = list\n"
-        "    }\n"
-        "\n"
-        "    // Values at particular position\n"
-        "    [index] = (value) {\n"
-        "        _slice[index] = value\n"
-        "    }\n"
-        "    \n"
-        "    \n"
-        "    [index] {\n"
-        "        return _slice[index]\n"
-        "    }\n"
-        "\n"
-        "    at(index) {\n"
-        "        return _slice[index]\n"
-        "    }\n"
-        "\n"
-        "    back {\n"
-        "        return _slice[-1]\n"
-        "    }\n"
-        "\n"
-        "    // Add values\n"
-        "    insert(position, value) {\n"
-        "        _slice[position] = value\n"
-        "    }\n"
-        "\n"
-        "    append(value) {\n"
-        "        _slice.insert(-1, value)\n"
-        "    }\n"
-        "\n"
-        "    // Checks\n"
-        "    empty {\n"
-        "        return _slice.count == 0\n"
-        "    }\n"
-        "\n"
-        "    size {\n"
-        "        return _slice.count\n"
-        "    }\n"
-        "\n"
-        "    // Remove elements\n"
-        "    erase(index) {\n"
-        "        _slice.removeAt(index)\n"
-        "    }\n"
-        "\n"
-        "    clear {\n"
-        "        _slice.clear()\n"
-        "    }\n"
-        "\n"
-        "    toString {\n"
-        "        return _slice\n"
-        "    }\n"
-        "}\n"
-        "class Dict {\n"
-        "    construct new() {\n"
-        "        _dict = {}\n"
-        "    }\n"
-        "\n"
-        "    construct new(map) {\n"
-        "        _dict = map\n"
-        "    }\n"
-        "\n"
-        "    [key] = (value) {\n"
-        "        _dict[key] = value\n"
-        "    }\n"
-        "    \n"
-        "    [key] {\n"
-        "        return _dict[key]\n"
-        "    }\n"
-        "\n"
-        "    at(key) {\n"
-        "        return _dict[key]\n"
-        "    }\n"
-        "\n"
-        "    insert(key, value) {\n"
-        "        _dict[key] = value\n"
-        "    }\n"
-        "    \n"
-        "    delete(key) {\n"
-        "        _dict.remove(key)\n"
-        "    }\n"
-        "\n"
-        "    size {\n"
-        "        return _dict.count\n"
-        "    }\n"
-        "\n"
-        "    empty {\n"
-        "        return _dict.count == 0\n"
-        "    }\n"
-        "\n"
-        "    find(key) {\n"
-        "        return _dict.containsKey(key)\n"
-        "    }\n"
-        "\n"
-        "    keys {\n"
-        "        return _dict.keys\n"
-        "    }\n"
-        "\n"
-        "    clear {\n"
-        "        return _dict.clear()\n"
-        "    }\n"
-        "\n"
-        "    toString {\n"
-        "        return _dict\n"
-        "    }\n"
-        "}\n";
+            "class Slice {\n"
+            "    construct new() {\n"
+            "        _slice = []\n"
+            "    }\n"
+            "\n"
+            "    construct new(list) {\n"
+            "        _slice = list\n"
+            "    }\n"
+            "\n"
+            "    // Values at particular position\n"
+            "    [index] = (value) {\n"
+            "        _slice[index] = value\n"
+            "    }\n"
+            "    \n"
+            "    \n"
+            "    [index] {\n"
+            "        return _slice[index]\n"
+            "    }\n"
+            "\n"
+            "    at(index) {\n"
+            "        return _slice[index]\n"
+            "    }\n"
+            "\n"
+            "    back {\n"
+            "        return _slice[-1]\n"
+            "    }\n"
+            "\n"
+            "    // Add values\n"
+            "    insert(position, value) {\n"
+            "        _slice[position] = value\n"
+            "    }\n"
+            "\n"
+            "    append(value) {\n"
+            "        _slice.insert(-1, value)\n"
+            "    }\n"
+            "\n"
+            "    // Checks\n"
+            "    empty {\n"
+            "        return _slice.count == 0\n"
+            "    }\n"
+            "\n"
+            "    size {\n"
+            "        return _slice.count\n"
+            "    }\n"
+            "\n"
+            "    // Remove elements\n"
+            "    erase(index) {\n"
+            "        _slice.removeAt(index)\n"
+            "    }\n"
+            "\n"
+            "    clear {\n"
+            "        _slice.clear()\n"
+            "    }\n"
+            "\n"
+            "    toString {\n"
+            "        return _slice\n"
+            "    }\n"
+            "}\n"
+            "class Dict {\n"
+            "    construct new() {\n"
+            "        _dict = {}\n"
+            "    }\n"
+            "\n"
+            "    construct new(map) {\n"
+            "        _dict = map\n"
+            "    }\n"
+            "\n"
+            "    [key] = (value) {\n"
+            "        _dict[key] = value\n"
+            "    }\n"
+            "    \n"
+            "    [key] {\n"
+            "        return _dict[key]\n"
+            "    }\n"
+            "\n"
+            "    at(key) {\n"
+            "        return _dict[key]\n"
+            "    }\n"
+            "\n"
+            "    insert(key, value) {\n"
+            "        _dict[key] = value\n"
+            "    }\n"
+            "    \n"
+            "    delete(key) {\n"
+            "        _dict.remove(key)\n"
+            "    }\n"
+            "\n"
+            "    size {\n"
+            "        return _dict.count\n"
+            "    }\n"
+            "\n"
+            "    empty {\n"
+            "        return _dict.count == 0\n"
+            "    }\n"
+            "\n"
+            "    find(key) {\n"
+            "        return _dict.containsKey(key)\n"
+            "    }\n"
+            "\n"
+            "    keys {\n"
+            "        return _dict.keys\n"
+            "    }\n"
+            "\n"
+            "    clear {\n"
+            "        return _dict.clear()\n"
+            "    }\n"
+            "\n"
+            "    toString {\n"
+            "        return _dict\n"
+            "    }\n"
+            "}\n";
 
         return utils;
     }
 
-    void rewrite()
+    void rewrite(Scanner &scanner)
     {
         tokens = scanner.scanTokens();
         tokenIndex = 0;
@@ -756,7 +776,7 @@ struct Parser
 
         // Partial pattern. Variadic <name>, <...>
         std::vector<TokenType> import = {TOKEN_IMPORT, TOKEN_STRING,
-                                       TOKEN_FOR};
+                                         TOKEN_FOR};
 
         std::vector<TokenType> func = {TOKEN_NAME, TOKEN_EQ,
                                        TOKEN_FUNC, TOKEN_LEFT_BRACE};
@@ -772,7 +792,7 @@ struct Parser
         std::vector<TokenType> structClass = {TOKEN_STRUCT, TOKEN_NAME,
                                               TOKEN_LEFT_BRACE};
 
-        while (tokenIndex <= (int)tokens.size())
+        while (tokenIndex < (int)tokens.size())
         {
             Token &t = current();
 
@@ -782,9 +802,9 @@ struct Parser
             // import "string" for <name>, <...>
             if (matchesPattern(import))
             {
-                Token &importTok = tokens[tokenIndex];       // import
-                Token &stringTok = tokens[tokenIndex + 1];   // "string"
-                Token &forTok = tokens[tokenIndex + 2];      // for
+                Token &importTok = tokens[tokenIndex];     // import
+                Token &stringTok = tokens[tokenIndex + 1]; // "string"
+                Token &forTok = tokens[tokenIndex + 2];    // for
 
                 emitToken(importTok);
                 emitToken(stringTok);
@@ -802,7 +822,7 @@ struct Parser
                         tokenIndex++;
                         break;
                     }
-                    
+
                     tokenIndex++;
                 }
                 continue;
@@ -838,7 +858,7 @@ struct Parser
                 emitToken(lbracket, "");
 
                 // Copy everything until the matching right bracket is found
-                tokenIndex += func.size() - 1;
+                tokenIndex += slices.size();
                 int bracketDepth = 1;
                 while (tokenIndex < (int)tokens.size())
                 {
@@ -874,7 +894,7 @@ struct Parser
                 emitToken(lbrace, "");
 
                 // Copy everything until the matching right brace is found
-                tokenIndex += func.size() - 1;
+                tokenIndex += dict.size();
                 int braceDepth = 1;
                 while (tokenIndex < (int)tokens.size())
                 {
@@ -972,21 +992,66 @@ struct Parser
     }
 };
 
-std::string loadFileIntoString(const std::string &filePath)
+struct Drop
 {
-    std::ifstream file(filePath);
+    std::string code = "";
+    std::string outName = "";
+    Scanner scanner;
+    Parser parser;
 
-    if (!file.is_open())
+    Drop()
     {
-        return "";
     }
 
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    file.close();
+    bool loadFileIntoString(const std::string &filePath)
+    {
+        std::ifstream file(filePath);
 
-    return buffer.str();
-}
+        if (!file.is_open())
+        {
+            return false;
+        }
+
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        file.close();
+
+        code = buffer.str();
+        return true;
+    }
+
+    void createOutFile(std::filesystem::path &src)
+    {
+        outName = src.filename().string();
+        int j = 0;
+        for (int i = outName.size() - 1; i >= 0; i--)
+        {
+            if (outName.at(i) == '.')
+                break;
+            j++;
+        }
+
+        outName.erase(outName.length() - j);
+        outName += "wren";
+
+        std::ofstream outFile(outName);
+
+        if (!outFile.is_open())
+        {
+            std::cerr << "Error opening file for writing!" << std::endl;
+            return;
+        }
+
+        outFile << parser.out;
+        outFile.close();
+    }
+
+    void run()
+    {
+        scanner = Scanner(code);
+        parser.rewrite(scanner);
+    }
+};
 
 int main(int argc, char *argv[])
 {
@@ -999,7 +1064,7 @@ int main(int argc, char *argv[])
     int srcArg = 1;
     if (strcmp(argv[srcArg], "-l") == 0)
         srcArg++;
-    
+
     std::filesystem::path src(argv[srcArg]);
     if (src.extension() != ".zaba")
     {
@@ -1007,60 +1072,22 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    std::string codeZaba = loadFileIntoString(argv[srcArg]);
-
-    if (codeZaba == "")
+    Drop drop = Drop();
+    if (!drop.loadFileIntoString(argv[srcArg]))
     {
         std::cerr << "Error opening file" << std::endl;
         return 3;
     }
 
-    /*
-    std::cout << "==========\n"
-              << "Zaba code:\n"
-              << "==========\n"
-              << codeZaba
-              << "\n----------\n";
-    */
-
-    Scanner scanner(codeZaba);
-    Parser parser(scanner);
-    parser.rewrite();
+    drop.run();
 
     if (srcArg == 2)
     {
-        for (auto &t : parser.tokens)
-        {
-            std::cout << std::setw(20) << t.typePrint(t.type) << " " << std::setw(4) << t.line << " |" << t.lexeme << "|\n";
-        }
+        drop.scanner.printTokens();
         return 0;
     }
 
-    //std::cout << parser.out << "\n";
-
-    std::string outName = src.filename().string();
-    int j = 0;
-    for (int i = outName.size() - 1; i >= 0; i--)
-    {
-        if (outName.at(i) == '.')
-            break;
-        j++;
-    }
-
-    outName.erase(outName.length() - j);
-    outName += "wren";
-
-    std::ofstream outFile(outName);
-    
-    if (!outFile.is_open())
-    {
-        std::cerr << "Error opening file for writing!" << std::endl;
-        return 1;
-    }
-
-    outFile << parser.out;
-    outFile.close();
-
-    std::string executeScript = ".\\wren_cli.exe .\\" + outName;
+    drop.createOutFile(src);
+    std::string executeScript = ".\\wren_cli.exe .\\" + drop.outName;
     system(executeScript.c_str());
 }
