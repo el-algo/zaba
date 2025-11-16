@@ -182,7 +182,7 @@ struct Scanner
     std::vector<Token> tokens;
     int start = 0;
     int current = 0;
-    int line = 0;
+    int line = 1;
 
     Scanner() = default;
     Scanner(std::string source)
@@ -218,8 +218,6 @@ struct Scanner
 
     void printTokens()
     {
-        std::cout << "Token list:\n"
-                  << tokens.size();
         for (auto &t : tokens)
         {
             std::cout << std::setw(20) << t.typePrint(t.type)
@@ -545,6 +543,9 @@ struct Scanner
 
     std::vector<Token> scanTokens()
     {
+        tokens.clear();
+        current = 0;
+        start = 0;
         while (!isAtEnd())
         {
             start = current;
@@ -767,6 +768,32 @@ struct Parser
         return utils;
     }
 
+    void handleSlices()
+    {
+        int bracketDepth = 1;
+        while (tokenIndex < (int)tokens.size())
+        {
+            Token &inner = current();
+            emitToken(inner, "");
+
+            if (inner.type == TOKEN_LEFT_BRACKET)
+                bracketDepth++;
+            if (inner.type == TOKEN_RIGHT_BRACKET)
+            {
+                bracketDepth--;
+
+                if (bracketDepth == 0)
+                {
+                    emit(")");
+                    tokenIndex++;
+                    break;
+                }
+            }
+
+            tokenIndex++;
+        }
+    }
+
     void rewrite(Scanner &scanner)
     {
         tokens = scanner.scanTokens();
@@ -859,25 +886,7 @@ struct Parser
 
                 // Copy everything until the matching right bracket is found
                 tokenIndex += slices.size();
-                int bracketDepth = 1;
-                while (tokenIndex < (int)tokens.size())
-                {
-                    Token &inner = current();
-                    emitToken(inner, "");
-
-                    if (inner.type == TOKEN_LEFT_BRACKET)
-                        bracketDepth++;
-                    if (inner.type == TOKEN_RIGHT_BRACKET)
-                        bracketDepth--;
-                    if (inner.type == TOKEN_RIGHT_BRACKET && bracketDepth == 0)
-                    {
-                        emit(")");
-                        tokenIndex++;
-                        break;
-                    }
-
-                    tokenIndex++;
-                }
+                handleSlices();
                 continue;
             }
 
@@ -899,7 +908,6 @@ struct Parser
                 while (tokenIndex < (int)tokens.size())
                 {
                     Token &inner = current();
-                    emitToken(inner, "");
 
                     if (inner.type == TOKEN_LEFT_BRACE)
                         braceDepth++;
@@ -907,18 +915,28 @@ struct Parser
                         braceDepth--;
                     if (inner.type == TOKEN_RIGHT_BRACE && braceDepth == 0)
                     {
-                        emit(")");
+                        emit("})");
                         tokenIndex++;
                         break;
                     }
 
+                    if (inner.type == TOKEN_LEFT_BRACKET)
+                    {
+                        emit("Slice.new([");
+                        tokenIndex++;
+                        handleSlices();
+                        continue;
+                    }
+
+                    emitToken(inner, "");
                     tokenIndex++;
                 }
                 continue;
             }
 
             // struct <name> {}
-            if (matchesPattern(structClass))
+            // class <name> {}
+            if (matchesPattern(structClass) || t.type == TOKEN_CLASS)
             {
                 Token &nameTok = tokens[tokenIndex + 1]; // name
                 Token &lbrace = tokens[tokenIndex + 2];  // {
@@ -931,6 +949,10 @@ struct Parser
 
                 int braceDepth = 1;
                 SymbolTable symbolTable = SymbolTable();
+                
+                bool isClass = false;
+                if (t.type == TOKEN_CLASS)
+                    isClass = true;
 
                 while (tokenIndex < (int)tokens.size() - 1)
                 {
@@ -944,7 +966,8 @@ struct Parser
                         braceDepth--;
                     if (tk.type == TOKEN_RIGHT_BRACE && braceDepth == 0)
                     {
-                        emitSettersAndGetters(symbolTable, nameTok.lexeme);
+                        if (!isClass)
+                            emitSettersAndGetters(symbolTable, nameTok.lexeme);
                         emit("}");
                         tokenIndex++;
                         break;
