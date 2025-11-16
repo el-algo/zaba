@@ -1,0 +1,13 @@
+var chars = ["A", "B", "C", "D"]
+chars[1] = "Z"
+System.print(chars[1])
+System.print(chars.at(1))
+System.print(chars.back)
+chars.insert(2, "X")
+System.print(chars.size)
+chars.append("Y")
+System.print(chars.toString)
+System.print(chars.empty)
+chars.erase(1)
+chars.clear
+System.print(chars.toString)

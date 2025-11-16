@@ -1,0 +1,5 @@
+var isWeekend = func { | day |
+    return (day == "Saturday" or day == "Sunday")
+}
+
+System.print(isWeekend.call("Monday"))

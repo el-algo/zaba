@@ -1,0 +1,18 @@
+/// Classical Person OOP example
+struct Person {
+    construct new(name, age) {
+        _name = name
+        _age = age
+    }
+
+    haveBirthday() {
+        age = age + 1
+    }
+}
+
+var Worker = Person.new("Gary", 30)
+System.print(Worker.name)
+Worker.haveBirthday()
+Worker.age = Worker.age + 1
+
+System.print(Worker.age)

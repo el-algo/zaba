@@ -1,0 +1,10 @@
+struct Date {
+    construct new(day, month, year) {
+        _day = day
+        _month = month
+        _year = year
+    }
+}
+
+var endOfTheYear = Date.new(31, 12, 1999)
+System.print(endOfTheYear.day)

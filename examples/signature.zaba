@@ -1,0 +1,10 @@
+var HHH = Fn.new{
+    System.print("!")
+}
+
+HHH = Fn.new{ | arg |
+    System.print("!" + arg)
+}
+
+HHH.call()
+HHH.call(": )")

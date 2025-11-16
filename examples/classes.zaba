@@ -1,0 +1,10 @@
+class Book {
+    construct new(title) {
+        _title = title
+    }
+
+    title{ _title }
+}
+
+var novel = Book.new("New book")
+System.print(novel.title)

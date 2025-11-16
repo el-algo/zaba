@@ -1,0 +1,16 @@
+var office = Dict.new({
+    "Alice":"Boss",
+    "Bob":"Engineer"
+})
+office["Dan"] = "H. R."
+System.print(office["Dan"])
+System.print(office.at("Dan"))
+office.insert("Frank", "Receptionist")
+System.print(office.toString)
+office.delete("Frank")
+System.print(office.toString)
+System.print(office.size)
+System.print(office.empty)
+System.print(office.find("Alice"))
+office.clear
+System.print(office.toString)
