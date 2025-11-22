@@ -1085,7 +1085,7 @@ int main(int argc, char *argv[])
     }
 
     int srcArg = 1;
-    if (strcmp(argv[srcArg], "-l") == 0)
+    if (strcmp(argv[srcArg], "-l") == 0 || strcmp(argv[srcArg], "-c") == 0)
         srcArg++;
 
     std::filesystem::path src(argv[srcArg]);
@@ -1104,9 +1104,15 @@ int main(int argc, char *argv[])
 
     drop.run();
 
-    if (srcArg == 2)
+    if (strcmp(argv[1], "-l") == 0)
     {
         drop.scanner.printTokens();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "-c") == 0)
+    {
+        drop.createOutFile(src);
         return 0;
     }
 
